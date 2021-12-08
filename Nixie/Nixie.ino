@@ -1,6 +1,8 @@
  #include <GyverPWM.h>
 #include <Wire.h>
 #include <Rtc_Pcf8563.h>
+#include <GyverTimer.h>
+GTimer_ms dotTimer(500);
 
 #include "DHT.h"
 #define DHT_PIN 17 // A3=17
@@ -21,6 +23,9 @@ DHT dht(DHT_PIN, DHT11);
    +---------+
 
 */
+int8_t hrs = 10, mins = 10, secs;
+int8_t dotFlag;
+
 byte bitsToSend = 255;
 byte bitsToSend1 = 255;
 byte bitsToSend2 = 255;
@@ -61,7 +66,6 @@ byte testweek[9] = {         // байты, который будут после
   0b00010000,
   0b00100000,
   0b01000000,
-  0b10000000,
 };
 //init the real time clock
 Rtc_Pcf8563 rtc;
@@ -72,9 +76,9 @@ void setup() {
   rtc.initClock();
   //set a time to start with.
   //day, weekday, month, century(1=1900, 0=2000), year(0-99)
-  rtc.setDate(14, 6, 3, 1, 10);
+  rtc.setDate(8, 3, 12, 0, 21);
   //hr, min, sec
-  rtc.setTime(1, 15, 0);
+  rtc.setTime(20, 50, 0);
 
   //устанавливаем режим OUTPUT
   pinMode(latchPin, OUTPUT);
@@ -108,6 +112,42 @@ void setup() {
   PWM_set(3, 239);
   //analogWrite(3, 239); // 239 = 167V
   dht.begin();
+
+  registerWrite2(testweek[++nweek % 9], HIGH);
+}
+
+
+void calculateTime() 
+{
+  dotFlag = !dotFlag;
+  if (dotFlag) 
+  {
+    secs++;
+    if (secs > 59) 
+    {
+      secs = 0;
+      mins++;
+
+      if (mins == 1 || mins == 30) {      // каждые полчаса
+        //burnIndicators();                 // чистим чистим!
+        rtc.getDateTime();
+        secs = rtc.getSecond();
+        secs = (bitToSet % 10 << 4) + bitToSet / 10;
+        mins = rtc.getMinute();
+        mins = (bitToSet1 % 10 << 4) + bitToSet1 / 10;
+        hrs = rtc.getHour();
+        hrs = (bitToSet2 % 10 << 4) + bitToSet2 / 10;
+      }
+    }
+    if (mins > 59) 
+    {
+      mins = 0;
+      hrs++;
+//      if (hrs > 23) hrs = 0;
+//      changeBright();
+    }
+  }
+
 }
 
 void setColorLED(int a1, int a2, int a3)
@@ -135,38 +175,28 @@ void loop() {
     // Символы от '0' до '9'
     // представлены в ASCII таблице значения от 48 до 57.
     //int bitToSet = Serial.parseInt();
-    int bitToSet = 1;
-    bitToSet = (bitToSet % 10 << 4) + bitToSet / 10;
-    int bitToSet1 = bitToSet;
-    int bitToSet2 = bitToSet;
-    int PWM = 1;
+
     // Записываем HIGH в позицию соответствующую bitToSet
     //registerWrite(bitToSet, bitToSet1, bitToSet2, HIGH);
     //bitSet(TCCR2A, COM2B1);
     //OCR2B = PWM;
-    PWM_set(3, 239);
-    int a1 = Serial.parseInt();
-    int a2 = Serial.parseInt();
-    int a3 = Serial.parseInt();
-    setColorLED(a1, a2, a3);
+    secs = Serial.parseInt();
+    mins = Serial.parseInt();
+    hrs = Serial.parseInt();
+    rtc.setTime(hrs, mins, secs);
+    //setColorLED(a1, a2, a3);
   }
-  rtc.getDateTime();
-  int bitToSet = rtc.getSecond();
-  bitToSet = (bitToSet % 10 << 4) + bitToSet / 10;
-  int bitToSet1 = rtc.getMinute();
-  bitToSet1 = (bitToSet1 % 10 << 4) + bitToSet1 / 10;
-  int bitToSet2 = rtc.getHour();
-  bitToSet2 = (bitToSet2 % 10 << 4) + bitToSet2 / 10;
-  registerWrite(bitToSet1, bitToSet2, bitToSet, HIGH);
+  if (dotTimer.isReady())
+    calculateTime();
 
-  registerWrite2(testweek[++nweek % 9], HIGH);
+  registerWrite(mins, hrs, secs, HIGH); 
 
   //getButtValue();
   //getHighVoltage();
 
-  digitalWrite(termPin, testVal);
-  digitalWrite(dotsPin, testVal);
-  digitalWrite(commas, testVal);
+  //digitalWrite(termPin, testVal);
+  digitalWrite(dotsPin, dotFlag);
+  //digitalWrite(commas, testVal);
   testVal = !testVal;
 
   byte temp = dht.readTemperature();
@@ -175,7 +205,7 @@ void loop() {
   Serial.println(temp);
   Serial.print("hum= ");
   Serial.println(hum);
-  delay(1000);
+  //delay(1000);
   //analogWrite(9, 20);
   //analogWrite(10, 120);
   //analogWrite(11, 240);
