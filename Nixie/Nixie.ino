@@ -23,7 +23,7 @@ DHT dht(DHT_PIN, DHT11);
    +---------+
 
 */
-int8_t hrs = 10, mins = 10, secs;
+int8_t hrs, mins, secs;
 int8_t dotFlag;
 
 byte bitsToSend = 255;
@@ -59,26 +59,31 @@ int dataWeek = 2;
 int nweek = 0;
 byte testweek[9] = {         // байты, который будут последовательно циклически выводиться в регистре
   0b00000000,
-  0b00000001,
-  0b00000010,
-  0b00000100,
-  0b00001000,
-  0b00010000,
-  0b00100000,
+  //0b00000001,
   0b01000000,
+  0b00100000,
+  0b00010000,
+  0b00001000,
+  0b00000100,
+  0b00000010, 
 };
+
+  byte temp;
+  byte hum;
+
+  
 //init the real time clock
 Rtc_Pcf8563 rtc;
 
 void setup() {
   //RTC
   //clear out the registers
-  rtc.initClock();
+  //rtc.initClock();
   //set a time to start with.
   //day, weekday, month, century(1=1900, 0=2000), year(0-99)
-  rtc.setDate(8, 3, 12, 0, 21);
+  //rtc.setDate(20, 1, 12, 0, 21);
   //hr, min, sec
-  rtc.setTime(20, 50, 0);
+  //rtc.setTime(21, 43, 15);
 
   //устанавливаем режим OUTPUT
   pinMode(latchPin, OUTPUT);
@@ -112,16 +117,27 @@ void setup() {
   PWM_set(3, 239);
   //analogWrite(3, 239); // 239 = 167V
   dht.begin();
-
-  registerWrite2(testweek[++nweek % 9], HIGH);
+  rtc.getDateTime();
+  nweek = rtc.getWeekday();
+          secs = rtc.getSecond();
+        
+        mins = rtc.getMinute();
+        
+        hrs = rtc.getHour();
+  registerWrite2(testweek[nweek]);
 }
 
 
 void calculateTime() 
 {
   dotFlag = !dotFlag;
+  digitalWrite(dotsPin, dotFlag);
   if (dotFlag) 
   {
+    if (secs > 41 && secs < 46) 
+      registerWrite(temp, 0, hum,  HIGH); 
+    else
+      registerWrite(secs, mins, hrs,  HIGH);  
     secs++;
     if (secs > 59) 
     {
@@ -132,11 +148,11 @@ void calculateTime()
         //burnIndicators();                 // чистим чистим!
         rtc.getDateTime();
         secs = rtc.getSecond();
-        secs = (bitToSet % 10 << 4) + bitToSet / 10;
+        
         mins = rtc.getMinute();
-        mins = (bitToSet1 % 10 << 4) + bitToSet1 / 10;
+        
         hrs = rtc.getHour();
-        hrs = (bitToSet2 % 10 << 4) + bitToSet2 / 10;
+        
       }
     }
     if (mins > 59) 
@@ -146,6 +162,8 @@ void calculateTime()
 //      if (hrs > 23) hrs = 0;
 //      changeBright();
     }
+
+    
   }
 
 }
@@ -189,13 +207,13 @@ void loop() {
   if (dotTimer.isReady())
     calculateTime();
 
-  registerWrite(mins, hrs, secs, HIGH); 
+  //registerWrite(mins, hrs, secs, HIGH); 
 
   //getButtValue();
   //getHighVoltage();
 
   //digitalWrite(termPin, testVal);
-  digitalWrite(dotsPin, dotFlag);
+  //digitalWrite(dotsPin, dotFlag);
   //digitalWrite(commas, testVal);
   testVal = !testVal;
 
@@ -212,10 +230,11 @@ void loop() {
 }
 
 // Этот метот записывает байт в регистр
-void registerWrite(int whichPin, int whichPin1, int whichPin2, int whichState) {
-  // инициализируем и обнуляем байт
-  //byte bitsToSend = 0;
-
+void registerWrite(int set1, int set2, int set3, int whichState) {
+  set1 = (set1 % 10 << 4) + set1 / 10;
+  set2 = (set2 % 10 << 4) + set2 / 10;
+  set3 = (set3 % 10 << 4) + set3 / 10;
+  
   //Отключаем вывод на регистре
   digitalWrite(latchPin, LOW);
 
@@ -223,16 +242,16 @@ void registerWrite(int whichPin, int whichPin1, int whichPin2, int whichState) {
   //bitWrite(bitsToSend, bitsToSend++, whichState);
 
   // проталкиваем байт в регистр
-  shiftOut(dataPin, clockPin, MSBFIRST, whichPin);
-  shiftOut(dataPin, clockPin, MSBFIRST, whichPin1);
-  shiftOut(dataPin, clockPin, MSBFIRST, whichPin2);
+  shiftOut(dataPin, clockPin, MSBFIRST, set2);
+  shiftOut(dataPin, clockPin, MSBFIRST, set3);
+  shiftOut(dataPin, clockPin, MSBFIRST, set1);
 
   // "защелкиваем" регистр, чтобы байт появился на его выходах
   digitalWrite(latchPin, HIGH);
 }
 
 // Этот метот записывает байт в регистр
-void registerWrite2(int whichPin, int whichState) {
+void registerWrite2(int whichPin) {
   // инициализируем и обнуляем байт
   //byte bitsToSend = 0;
 
